@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.util.Vector;
 
 import org.apache.logging.log4j.*;
@@ -52,43 +53,52 @@ class Iniproc {
 		try {
 			br = new BufferedReader(new FileReader(filename));
 			buf = br.readLine();
-			while (buf != null)
-			{
+			logger.debug(buf);
+			while (buf != null) {
+				logger.debug("readini()" + buf);
 				rdata = buf;
 				rdata.trim();
-				if (rdata.isEmpty()) continue;
-				if (rdata.indexOf(0) == '#') continue; /* comment line */
+				
+				if (rdata.isEmpty()) {
+					buf = br.readLine();
+					continue;
+				}
+				
+				if (rdata.indexOf(0) == '#') { // comment line
+					buf = br.readLine();
+					continue;
+				}
+				
 				idx = rdata.indexOf("=");
-				if (idx == -1) continue; /* strange line */
+				if (idx == -1) { // strange line
+					buf = br.readLine();
+					continue;
+				}
+				
 				value = rdata.substring(idx+1);
-				if (value.isEmpty())
-				{
+				if (value.isEmpty()) {
 					br.close();
 					logger.error("rvalue is empty");
 					return 0;
 				}
-				if (rdata.indexOf("LOG_ID=") != -1)
-				{
-					if (!node.functionName.isEmpty())
-					{
+				
+				if (rdata.indexOf("LOG_ID=") != -1) {
+					if (!node.functionName.isEmpty()) {
 						br.close();
 						logger.error("endl=end seems to be omitted!!!\n");
-						return 0;					
+						return 0;
 					}
 					node.functionName = value;
-				}
-				else if (rdata.indexOf("syntax=") != -1 || rdata.indexOf("SYNTAX=") != -1)
-				{
-					if (value.charAt(0) != '(' || value.charAt(value.length()-1) != ')')
-					{
+				} else if (rdata.indexOf("syntax=") != -1 || rdata.indexOf("SYNTAX=") != -1) {
+					if (value.charAt(0) != '(' || value.charAt(value.length()-1) != ')') {
 						br.close();
 						logger.error("syntax (...) abnormal\n");
 						return 0;
 					}
+					
 					value = value.substring(1);							/* first char'(' remove */
 					value = value.substring(0, value.length()-1);		/* last	char')' remove */
-					if (value.isEmpty())
-					{
+					if (value.isEmpty()) {
 						br.close();
 						logger.error("syntax is empty.\n");
 						return 0;
@@ -96,11 +106,8 @@ class Iniproc {
 					value.replace("/LRB/", "(");
 					value.replace("/RRB/", ")");
 					node.syntax.add(value);
-				}
-				else if (rdata.indexOf("endl=") != -1 || rdata.indexOf("ENDL=") != -1)
-				{
-					if (value.isEmpty())
-					{
+				} else if (rdata.indexOf("endl=") != -1 || rdata.indexOf("ENDL=") != -1) {
+					if (value.isEmpty()) {
 						br.close();
 						logger.error("endl's value is empty.\n");
 						return 0;
@@ -108,9 +115,7 @@ class Iniproc {
 					maketokens(node);
 					vnode.add(node);
 					node.clearNode();
-				}
-				else
-				{
+				} else {
 					node.fields.add(value);
 				}
 				buf = br.readLine();
@@ -145,12 +150,16 @@ class Iniproc {
 		}
 		
 		for(; !syntax.isEmpty(); ) {
+			logger.debug("maketoknes()");
 			idx = syntax.indexOf(Sign, init);
 			if (idx != -1) {
-				if (idx > init)
-					node.tokens.add(syntax.substring(init, idx));
+				if (idx > init) {
+					String tok = syntax.substring(init, idx);
+					logger.debug(tok);
+					node.tokens.add(tok);
+				}
 				node.tokens.add(Sign);
-				syntax.substring(init,idx+Sign.length());
+				syntax = syntax.substring(idx+Sign.length());
 			} else {
 				 node.tokens.add(syntax);
 				 break;
@@ -159,7 +168,8 @@ class Iniproc {
 		return 1;
 	}
 	
-	public int doParse(String inputstr, String resultstr, String hostip) {
+	//public int doParse(String inputstr, String resultstr, String hostip) {
+	public int doParse(String inputstr, String resultstr, InetAddress hostip) {
 		Vector<String> pardata = new Vector<String>(); /* parsed data */
 		Boolean islasttoken;
 		String index;
@@ -167,7 +177,7 @@ class Iniproc {
 		int i, j;
 		String ptr, ptr2, pend = new String();
 
-		pend = inputstr.substring(inputstr.indexOf(inputstr.length()));
+		pend = inputstr.substring(inputstr.indexOf(inputstr.length()-1));
 		for (i = 0; i < vnode.size(); ++i)
 		{
 			ptr = inputstr;
@@ -186,74 +196,136 @@ class Iniproc {
 					{
 						ptr2 = ptr.substring(ptr.indexOf(vnode.get(i).tokens.get(j+1)));
 						if (ptr2.isEmpty()) break;
-						pardata.add(string(ptr,ptr2-ptr));
-						ptr = ptr2 + vnode[i].tokens[j+1].size();
+						pardata.add(ptr.substring(ptr.indexOf(ptr2)));
+						ptr = ptr2 + vnode.get(i).tokens.get(j+1).length();
 						++j; /* because next token is also processed */
 					}
 				} 
 				else /* constant string */
 				{
-					ptr2 = strstr(ptr,vnode[i].tokens[j].c_str());
-					if (!ptr2) break;
+					ptr2 = ptr.substring(ptr.indexOf(vnode.get(i).tokens.get(j+1)));
+					if (ptr2.isEmpty()) break;
 					else
 					{
 						if (ptr2 != ptr) break;
-						ptr += vnode[i].tokens[j].size();
+						ptr += vnode.get(i).tokens.get(j).length();
 					}
 				}
 			}/* inner for loop */
-			if (ptr == pend && j == vnode[i].tokens.size()) break;
+			if (ptr == pend && j == vnode.get(i).tokens.size()) break;
 		}/* out for loop */
-		if (i == vnode.size()) return -1;
-		resultstr = "<FC>" + vnode[i].functionName + "</FC><ARG>"; 
-		for(unsigned k=0;k < vnode[i].fields.size();++k)
+		if (i == vnode.size()) return 0;
+		resultstr = "<FC>" + vnode.get(i).functionName + "</FC><ARG>"; 
+		for(int k=0;k < vnode.get(i).fields.size();++k)
 		{
 			if (k>0) resultstr += "~";
-			if (vnode[i].fields[k] == "hostip")
+			if (vnode.get(i).fields.get(k) == "hostip")
 				resultstr += hostip;
-			else if (vnode[i].fields[k].at(0) == '#')
+			else if (vnode.get(i).fields.get(k).charAt(0) == '#')
 			{
-				snprintf(index,sizeof index,"%s",vnode[i].fields[k].c_str());
-				if ((unsigned)atoi(index+1) < pardata.size())
-					resultstr += pardata[atoi(index+1)];
+				index = String.format("%s", vnode.get(i).fields.get(k));
+				if (Integer.parseInt(index+1) < pardata.size())
+					resultstr += pardata.get(Integer.parseInt(index+1));
 				else
 				{
-					return -1;
+					return 0;
 				}
 			}
-			else if (vnode[i].fields[k].at(0) == '(' && vnode[i].fields[k].at(vnode[i].fields[k].size()-1) == ')') /* 20110519 add */
-			{ /* complex string process */
-				string::size_type idx,idx2;
-				string cmplxstr = vnode[i].fields[k].substr(1);
-				cmplxstr.erase(cmplxstr.size()-1); /* last ')' remove */
+			else if (vnode.get(i).fields.get(k).charAt(0) == '(' 
+					&& vnode.get(i).fields.get(k).charAt(vnode.get(i).fields.get(k).length()-1) == ')')
+			{
+				int idx, idx2;
+				String cmplxstr = new String();
+				cmplxstr = vnode.get(i).fields.get(k).substring(1);
+				cmplxstr = cmplxstr.substring(0, cmplxstr.length()-1); /* last ')' remove */
 				for(;;)
 				{
-					idx = cmplxstr.find("/#");
-					if (idx == string::npos) break;
-					idx2 = cmplxstr.find("/",idx+1);
-					if (idx2 == string::npos) return -1;
-					snprintf(index,sizeof index,"%s",cmplxstr.substr(idx+2,idx2-(idx+2)).c_str());
-					if ((unsigned)atoi(index) < pardata.size())
-						cmplxstr.replace(idx,idx2+1-idx,pardata[atoi(index)]);
+					idx = cmplxstr.indexOf("/#");
+					if (idx == -1) break;
+					idx2 = cmplxstr.indexOf("/", idx+1);
+					if (idx2 == -1) return 0;
+					index = String.format("%s", cmplxstr.substring(idx+2,idx2-(idx+2)));
+					if (Integer.parseInt(index) < pardata.size())
+						cmplxstr.replace(cmplxstr.substring(idx, idx2), pardata.get(Integer.parseInt(index)));
 					else
-						return -1;
+						return 0;
 				}
 				resultstr += cmplxstr;
 			}
 			else
-				resultstr += vnode[i].fields[k];
+				resultstr += vnode.get(i).fields.get(k);
 		}
 		resultstr += "</ARG>";
-		return 0;
+		return 1;
 	}
+	
 	public int getLogId(String inputstr, String LogId) {
-		return 0;
+		Boolean islasttoken;
+		
+		LogId = new String();
+		int i,j;
+		String ptr, ptr2, pend = new String();
+
+		pend = inputstr.substring(inputstr.indexOf(inputstr.length()));
+		for (i=0; i < vnode.size(); ++i) {
+			ptr = inputstr;
+			pdata.clear();
+			for (j=0; j < vnode.get(i).tokens.size(); ++j) {
+				islasttoken = (j+1 == vnode.get(i).tokens.size()) ? true : false;
+				if (vnode.get(i).tokens.get(j) == Sign) {
+					if (islasttoken) {
+						pdata.add(ptr);
+						ptr = inputstr.substring(inputstr.indexOf(inputstr.length()));
+					} 
+					else {
+						ptr2 = ptr.substring(ptr.indexOf(vnode.get(i).tokens.get(j+1)));
+						if (ptr2.isEmpty())
+							break;
+						pdata.add(ptr.substring(ptr.indexOf(ptr2)));
+						ptr = ptr2 + vnode.get(i).tokens.get(j+1).length();
+						++j; /* because next token is also processed */
+					}
+				} 
+				else {	/* constant string */
+					ptr2 = ptr.substring(ptr.indexOf(vnode.get(i).tokens.get(j)));
+					if (ptr2.isEmpty())
+						break;
+					else {
+						if (ptr2 != ptr)
+							break;
+						ptr += vnode.get(i).tokens.get(j).length();
+					}
+				}
+			}	/* inner for loop */
+			if (ptr == pend && j == vnode.get(i).tokens.size())
+				break;
+		}	/* out for loop */
+		if (i == vnode.size()) {
+			logger.error("i=[%d], vnode.size()=[%d]\n", i, vnode.size());
+			return 0;
+		}
+		
+		LogId = vnode.get(i).functionName;
+		
+		return 1;
 	}
-	public int doParse2(String inputstr, String resultstr, String hostip) {
-		return 0;
-	}
+	
 	public int printIniInfo() {
-		return 0;
+		logger.info("REPORT--------------");
+		for (int j=0; j < vnode.size(); ++j) {
+			logger.info("(" + j+1 + ")function:" + vnode.get(j).functionName + "---------------");
+			logger.info("syntax size:" + vnode.get(j).syntax.size());
+			logger.info("fields size:" + vnode.get(j).fields.size());
+
+			//for (unsigned i=0; i < vnode[j].syntax.size(); ++i)
+				logger.info("syntax:" + vnode.get(j).syntax.get(0));
+			for (int i=0; i < vnode.get(j).tokens.size(); ++i)
+				logger.info("->tokens(" + i+1 + "):" + vnode.get(j).tokens.get(i));
+			for (int i=0; i < vnode.get(j).fields.size(); ++i)
+				logger.info("->fields(" + i+1 + "):" + vnode.get(j).fields.get(i));
+		}
+		
+		return 1;
 	}
 }
 

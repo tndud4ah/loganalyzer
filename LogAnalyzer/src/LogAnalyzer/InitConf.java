@@ -10,11 +10,13 @@ public class InitConf {
 	public static String sRecvPath = ".\\recv\\";
 	public static String sParsePath = ".\\parse\\";
 	public static String sAgentPath = ".\\info\\";
+	public static String sRulePath = ".\\rule\\";
 	
 	InitConf() {
 		createPath(sRecvPath);
 		createPath(sParsePath);
 		createPath(sAgentPath);
+		createPath(sRulePath);
 	}
 
 	void createPath(String s) {

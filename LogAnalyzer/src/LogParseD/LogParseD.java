@@ -6,6 +6,10 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.net.InetAddress;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 import java.util.StringTokenizer;
 import java.util.Vector;
 
@@ -13,7 +17,7 @@ import org.apache.logging.log4j.*;
 
 public class LogParseD {
 	static Logger logger = LogManager.getRootLogger();
-	
+	static String sAllowLog = "<206>[LOG_ADMITTED] id=firewall time=\"2015-05-26 10:00:29\" fw=YD-INTFW-1 pri=7 rule=441 proto=123/udp src=10.90.1.193 src_port=123 dst=10.90.53.151 dst_port=123 sent=94 rcvd=94 duration=64 msg=\"source interface = External\"";	
 	static Vector<cAgentInfo> vAgentInfo = new Vector<cAgentInfo> ();
 
 	static class cAgentInfo {
@@ -52,15 +56,53 @@ public class LogParseD {
 	public static void main(String args[]) {
 		ReadAgentInfo();
 		for(int i=0; i < vAgentInfo.size(); i++) {
-			System.out.println(vAgentInfo.elementAt(i).ip);
+			logger.debug(vAgentInfo.get(i).ip);
 		}
 		
 		Vector<String> vs = new Vector<String>();
 		vs = getFileNames(LogAnalyzer.InitConf.sRecvPath, "dat");
 		for(int i=0; i < vs.size(); i++) {
-			System.out.println(vs.elementAt(i));
+			logger.debug(vs.elementAt(i));
 		}
 		
+		String solution = new String();
+		solution = "fw;ips;";
+		
+		
+		Map<String, Iniproc> mInifile = new HashMap<String, Iniproc>();
+		StringTokenizer sKey = new StringTokenizer(solution, ";");
+		while (sKey.hasMoreElements()) {
+			Iniproc iniproc = new Iniproc();
+			mInifile.put(sKey.nextToken(), iniproc);
+		}
+
+		for (Map.Entry<String, Iniproc> entry: mInifile.entrySet()) {
+			logger.debug(entry.getKey() + entry.getValue());
+			String szTemp = String.format(".\\rule\\%s.ini", entry.getKey());
+			File f = new File(szTemp);
+			if (!f.exists()) {
+				logger.info(szTemp + " is not found.");
+				System.exit(0);
+			}
+			entry.getValue().readini(szTemp);
+		}
+		
+		mInifile.get("fw").printIniInfo();
+		
+		String resultstr = new String();
+		mInifile.get("fw").doParse(sAllowLog, resultstr, vAgentInfo.get(0).ip);
+		
+		Set<Entry<String, Iniproc>> mitr = mInifile.entrySet();
+		logger.debug(mitr.size());
+/*		for (mitr = mInifile..begin(); mitr != g_stConfig.mInifile.end(); ++mitr) {
+			snprintf(szTemp, sizeof(szTemp), "%s/ini/%s.ini", getwienv("ESM_HOME"), mitr->first.c_str());
+			if (access(szTemp, F_OK) != 0) {	// ini file does not exist.
+				Thr_Log(LOG_PRINT, 0, FL, "[%s] is not found!!!\n", szTemp);
+				exit(2);
+			}
+			//mitr.second.readini(szTemp);
+		}
+*/
 		
 		
 	}
